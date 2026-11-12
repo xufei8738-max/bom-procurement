@@ -1,0 +1,11 @@
+*.db
+*.db-journal
+*.pyc
+*.spec
+.DS_Store
+.pytest_cache/
+.venv/
+__pycache__/
+build/
+dist/
+procurement-data/

@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>器件采购库</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font: 14px/1.6 "Microsoft YaHei", "PingFang SC", sans-serif; background: #f4f5f7; color: #24292f; }
+  header { background: #1f2937; color: #fff; padding: 10px 20px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 17px; font-weight: 600; }
+  #tokenbox { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  #token { width: 230px; padding: 5px 8px; border: none; border-radius: 4px; font-size: 13px; }
+  #tokenok { font-size: 12px; }
+  nav { background: #fff; border-bottom: 1px solid #d8dee4; padding: 0 20px; display: flex; gap: 4px; flex-wrap: wrap; }
+  nav button { border: none; background: none; padding: 11px 16px; font-size: 14px; cursor: pointer; color: #57606a; border-bottom: 2px solid transparent; }
+  nav button.active { color: #0969da; border-bottom-color: #0969da; font-weight: 600; }
+  main { padding: 18px 20px; max-width: 1200px; margin: 0 auto; }
+  .card { background: #fff; border: 1px solid #d8dee4; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+  .card h3 { font-size: 14px; margin-bottom: 10px; color: #1f2937; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; background: #f6f8fa; padding: 7px 8px; border: 1px solid #e6e8eb; white-space: nowrap; }
+  td { padding: 6px 8px; border: 1px solid #e6e8eb; vertical-align: top; }
+  tr:hover td { background: #f6f8fa; }
+  .btn { background: #2da44e; color: #fff; border: none; border-radius: 5px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+  .btn.blue { background: #0969da; } .btn.gray { background: #6e7781; } .btn.red { background: #cf222e; }
+  .btn.small { padding: 2px 8px; font-size: 12px; }
+  input, select, textarea { padding: 5px 7px; border: 1px solid #d0d7de; border-radius: 5px; font-size: 13px; font-family: inherit; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; align-items: center; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; }
+  .tag.purchase { background: #dafbe1; color: #116329; } .tag.quote { background: #fff8c5; color: #4d2d00; }
+  .tag.contract { background: #ddf4ff; color: #0550ae; } .tag.exact { background: #dafbe1; color: #116329; }
+  .tag.fuzzy { background: #fff8c5; color: #4d2d00; } .tag.alias { background: #ddf4ff; color: #0550ae; }
+  .tag.none { background: #ffebe9; color: #82071e; }
+  .muted { color: #6e7781; font-size: 12px; }
+  .err { color: #cf222e; font-size: 12px; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .stat { background: #f6f8fa; border-radius: 6px; padding: 10px 12px; }
+  .stat b { display: block; font-size: 22px; color: #0969da; }
+  .searchbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  #msg { position: fixed; top: 14px; right: 14px; z-index: 9; }
+  .toast { background: #1f2937; color: #fff; padding: 8px 14px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; max-width: 360px; }
+  .toast.err { background: #cf222e; }
+  dialog { border: none; border-radius: 10px; padding: 0; width: min(560px, 94vw); }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  .dlg-body { padding: 16px 18px; }
+  .dlg-body h3 { margin-bottom: 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+  .grid2 label { font-size: 12px; color: #57606a; display: block; }
+  .grid2 input, .grid2 select { width: 100%; }
+  .dlg-foot { display: flex; gap: 8px; justify-content: flex-end; padding: 10px 18px 16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📦 器件采购库</h1>
+  <span class="muted" style="color:#9ea7b3">双击独立使用 · 也可被 OneAgent 经 MCP 调用</span>
+  <div id="tokenbox">
+    <input id="token" type="password" placeholder="接口口令（数据目录 接口口令.txt）">
+    <button class="btn gray" onclick="saveToken()">保存口令</button>
+    <span id="tokenok" class="muted"></span>
+  </div>
+</header>
+<nav>
+  <button data-tab="items" class="active" onclick="switchTab('items')">物料</button>
+  <button data-tab="import" onclick="switchTab('import')">资料导入</button>
+  <button data-tab="prices" onclick="switchTab('prices')">价格</button>
+  <button data-tab="search" onclick="switchTab('search')">检索匹配</button>
+  <button data-tab="aliases" onclick="switchTab('aliases')">别名</button>
+  <button data-tab="pending" onclick="switchTab('pending')">待确认</button>
+  <button data-tab="conv" onclick="switchTab('conv')">单位换算</button>
+  <button data-tab="stats" onclick="switchTab('stats')">统计</button>
+</nav>
+<main>
+  <div id="msg"></div>
+
+  <!-- 物料 -->
+  <section id="tab-items">
+    <div class="card">
+      <h3>物料列表 <button class="btn blue small" style="float:right" onclick="dlgItem()">＋ 新增物料</button></h3>
+      <div class="searchbar">
+        <input id="items-kw" placeholder="型号 / 品牌 / 品类 / 规格关键字" style="width:280px" onkeydown="if(event.key==='Enter')loadItems()">
+        <button class="btn blue" onclick="loadItems()">查询</button>
+        <select id="items-status">
+          <option value="active">在用</option><option value="inactive">已停用</option>
+        </select>
+      </div>
+      <div id="items-table"></div>
+    </div>
+  </section>
+
+  <!-- 资料导入 -->
+  <section id="tab-import" style="display:none">
+    <div class="card">
+      <h3>资料导入（历史采购合同 / 报价清单 → 统一入库）</h3>
+      <div class="searchbar">
+        <input id="imp-path" placeholder="文件路径，如 ~/Documents/采购清单.xlsx（xlsx/xls/csv/docx）" style="width:420px">
+        <select id="imp-ptype">
+          <option value="">类型：按文件名自动判定</option>
+          <option value="purchase">采购成本</option>
+          <option value="contract">合同价</option>
+          <option value="quote">报价参考</option>
+        </select>
+        <button class="btn blue" onclick="doParse()">① 解析预览</button>
+      </div>
+      <div id="import-preview"></div>
+    </div>
+  </section>
+
+  <!-- 价格 -->
+  <section id="tab-prices" style="display:none">
+    <div class="card">
+      <h3>价格流水（追加不覆盖，同型号多价并存）</h3>
+      <div class="searchbar">
+        <input id="price-item" placeholder="物料 item_id，如 3" style="width:160px">
+        <button class="btn blue" onclick="loadPrices()">查价格</button>
+        <button class="btn" onclick="dlgPrice()">＋ 录入价格</button>
+      </div>
+      <div id="prices-table"></div>
+    </div>
+  </section>
+
+  <!-- 检索 -->
+  <section id="tab-search" style="display:none">
+    <div class="card">
+      <h3>三级匹配检索（别名 → 精确 → 模糊）</h3>
+      <div class="searchbar">
+        <input id="search-q" placeholder="客户型号 / 描述，如 DS-2CD3T46WDV3-I3" style="width:300px" onkeydown="if(event.key==='Enter')doSearch()">
+        <button class="btn blue" onclick="doSearch()">检索</button>
+      </div>
+      <div id="search-result"></div>
+    </div>
+  </section>
+
+  <!-- 别名 -->
+  <section id="tab-aliases" style="display:none">
+    <div class="card">
+      <h3>别名表（人工确认回流：原始叫法 → 物料）</h3>
+      <div class="searchbar">
+        <input id="alias-kw" placeholder="关键字" style="width:200px" onkeydown="if(event.key==='Enter')loadAliases()">
+        <button class="btn blue" onclick="loadAliases()">查询</button>
+        <button class="btn" onclick="dlgAlias()">＋ 登记别名</button>
+      </div>
+      <div id="aliases-table"></div>
+    </div>
+  </section>
+
+  <!-- 待确认 -->
+  <section id="tab-pending" style="display:none">
+    <div class="card">
+      <h3>待确认区（解析低把握条目，人工兜底）</h3>
+      <div id="pending-table"></div>
+    </div>
+  </section>
+
+  <!-- 换算 -->
+  <section id="tab-conv" style="display:none">
+    <div class="card">
+      <h3>单位换算表</h3>
+      <div class="row">
+        <input id="conv-from" placeholder="从（箱）" style="width:90px">
+        <input id="conv-to" placeholder="到（米）" style="width:90px">
+        <input id="conv-factor" placeholder="系数 305" style="width:110px">
+        <input id="conv-cat" placeholder="品类（可选）" style="width:140px">
+        <button class="btn" onclick="addConv()">保存换算</button>
+      </div>
+      <div id="conv-table"></div>
+    </div>
+  </section>
+
+  <!-- 统计 -->
+  <section id="tab-stats" style="display:none">
+    <div class="card"><h3>库统计</h3><div id="stats-box" class="stats-grid"></div></div>
+  </section>
+</main>
+
+<dialog id="dlg">
+  <div class="dlg-body" id="dlg-content"></div>
+  <div class="dlg-foot"><button class="btn gray" onclick="dlg.close()">取消</button><button class="btn" onclick="dlgSubmit()">保存</button></div>
+</dialog>
+
+<script>
+const $ = id => document.getElementById(id);
+let token = localStorage.getItem('proc_token') || '';
+let dlgAction = null;
+let currentSearch = null;
+
+// ---------- 基础 ----------
+function saveToken(){ token = $('token').value.trim(); localStorage.setItem('proc_token', token); location.reload(); }
+async function api(path, body){
+  const opt = { headers: { 'Authorization': 'Bearer ' + token } };
+  if (body !== undefined){ opt.method = 'POST'; opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  const res = await fetch(path, opt);
+  if (res.status === 401){ toast('口令错误：请查看数据目录下 接口口令.txt', true); throw new Error('401'); }
+  return res.json();
+}
+function toast(text, err){
+  const d = document.createElement('div'); d.className = 'toast' + (err ? ' err' : ''); d.textContent = text;
+  $('msg').appendChild(d); setTimeout(() => d.remove(), 3500);
+}
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function switchTab(name){
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('main section').forEach(s => s.style.display = s.id === 'tab-' + name ? '' : 'none');
+  if (name === 'items') loadItems();
+  if (name === 'pending') loadPending();
+  if (name === 'conv') loadConv();
+  if (name === 'stats') loadStats();
+  if (name === 'aliases') loadAliases();
+}
+
+// ---------- 物料 ----------
+async function loadItems(){
+  const kw = $('items-kw').value.trim(), status = $('items-status').value;
+  const data = await api('/api/items?keyword=' + encodeURIComponent(kw) + '&status=' + status);
+  let html = '<table><tr><th>ID</th><th>型号</th><th>品牌</th><th>品类</th><th>规格</th><th>单位</th><th>状态</th><th>操作</th></tr>';
+  for (const it of data.items || []){
+    html += `<tr><td>${it.item_id}</td><td><b>${esc(it.model_raw)}</b></td><td>${esc(it.brand)}</td><td>${esc(it.category)}</td><td>${esc(it.spec)}</td><td>${esc(it.unit)}</td>
+    <td>${it.status === 'active' ? '在用' : '停用'}</td>
+    <td><button class="btn blue small" onclick="dlgItem(${it.item_id})">改</button>
+        <button class="btn small" onclick="showPrices(${it.item_id})">价</button>
+        <button class="btn red small" onclick="deactItem(${it.item_id})">停</button></td></tr>`;
+  }
+  html += '</table>';
+  if (!(data.items || []).length) html = '<p class="muted">暂无物料。点右上「＋ 新增物料」开始，或让 OneAgent 用 Skill 批量录入。</p>';
+  $('items-table').innerHTML = html;
+}
+function dlgItem(id){
+  const it = {};
+  if (id) { /* 编辑模式：从列表行取值 */ }
+  openDlg(`<h3>${id ? '编辑物料 ' + id : '新增物料'}</h3><div class="grid2">
+    <div><label>型号 *</label><input id="f-model" value="${id ? '' : ''}"></div>
+    <div><label>品牌</label><input id="f-brand"></div>
+    <div><label>品类（如 安防/摄像机）</label><input id="f-category"></div>
+    <div><label>单位</label><input id="f-unit" value="个"></div>
+    <div style="grid-column:1/3"><label>规格描述</label><input id="f-spec" style="width:100%"></div>
+  </div>`, async () => {
+    const model = $('f-model').value.trim();
+    if (!model) return toast('型号必填', true);
+    const body = { model, brand: $('f-brand').value.trim(), category: $('f-category').value.trim(),
+      spec: $('f-spec').value.trim(), unit: $('f-unit').value.trim() || '个' };
+    const r = id ? await api('/api/items/' + id, body) : await api('/api/items', body);
+    toast(r.message || r.error || '已保存');
+    loadItems();
+  });
+}
+async function deactItem(id){
+  if (!confirm('停用该物料？价格历史保留可追溯。')) return;
+  await api('/api/items/' + id + '/deactivate', {});
+  loadItems();
+}
+
+// ---------- 价格 ----------
+function showPrices(id){ $('price-item').value = id; switchTab('prices'); loadPrices(); }
+async function loadPrices(){
+  const id = $('price-item').value.trim();
+  if (!id) return toast('请输入物料 item_id', true);
+  const rows = await api('/api/prices/' + id);
+  const TYPE = { purchase: ['采购成本','purchase'], quote: ['报价参考','quote'], contract: ['合同价','contract'] };
+  let html = '<table><tr><th>价格ID</th><th>单价</th><th>类型</th><th>税口径</th><th>数量</th><th>计价单位</th><th>供应商</th><th>日期</th><th>来源</th></tr>';
+  for (const p of rows || []){
+    const t = TYPE[p.price_type] || [p.price_type, ''];
+    html += `<tr><td>${p.price_id}</td><td><b>${p.price}</b></td><td><span class="tag ${t[1]}">${t[0]}</span></td>
+    <td>${p.tax_mode === 'included' ? '含税' : p.tax_mode === 'excluded' ? '未税' : '未知'}</td>
+    <td>${p.qty ?? ''}</td><td>${esc(p.unit)}</td><td>${esc(p.vendor)}</td><td>${esc(p.price_date)}</td>
+    <td class="muted">${esc(p.source)}</td></tr>`;
+  }
+  html += '</table>';
+  if (!(rows || []).length) html = '<p class="muted">该物料暂无价格记录。</p>';
+  $('prices-table').innerHTML = html;
+}
+function dlgPrice(){
+  openDlg(`<h3>录入价格（追加，不覆盖历史）</h3><div class="grid2">
+    <div><label>物料 item_id</label><input id="f-itemid" value="${$('price-item').value.trim()}"></div>
+    <div><label>或 型号（不存在自动建物料）</label><input id="f-model"></div>
+    <div><label>单价 *</label><input id="f-price" placeholder="数字"></div>
+    <div><label>价格类型</label><select id="f-ptype">
+      <option value="purchase">采购成本</option><option value="contract">合同价</option><option value="quote">报价参考</option>
+    </select></div>
+    <div><label>日期</label><input id="f-date" type="date"></div>
+    <div><label>税口径</label><select id="f-tax">
+      <option value="unknown">未知</option><option value="included">含税</option><option value="excluded">未税</option>
+    </select></div>
+    <div><label>供应商</label><input id="f-vendor"></div>
+    <div><label>计价单位</label><input id="f-punit" placeholder="如 台/箱"></div>
+    <div style="grid-column:1/3"><label>来源（文件#行号，可追溯红线）</label><input id="f-source" style="width:100%"></div>
+  </div>`, async () => {
+    const body = { item_id: $('f-itemid').value.trim() || null, model: $('f-model').value.trim() || null,
+      price: parseFloat($('f-price').value), price_type: $('f-ptype').value, price_date: $('f-date').value,
+      tax_mode: $('f-tax').value, vendor: $('f-vendor').value.trim(), price_unit: $('f-punit').value.trim(), source: $('f-source').value.trim() };
+    if (isNaN(body.price)) return toast('单价必须是数字', true);
+    const r = await api('/api/prices', body);
+    r.error ? toast(r.error, true) : toast('已录入 price_id=' + r.price_id);
+    if (body.item_id) loadPrices();
+  });
+}
+
+// ---------- 检索 ----------
+async function doSearch(){
+  const q = $('search-q').value.trim();
+  if (!q) return;
+  const r = await api('/api/search', { query: q, limit: 8 });
+  currentSearch = r;
+  const label = { alias: '别名命中', exact: '型号精确', fuzzy: '模糊候选', none: '无候选' };
+  let html = `<p style="margin-bottom:8px">状态：<span class="tag ${r.status}">${label[r.status]}</span> <span class="muted">${r.count} 条</span></p>`;
+  if (r.status === 'none'){
+    html += '<p class="err">库内无匹配 → 该行应进「未匹配清单」，需人工补价或登记别名。绝不用模糊候选的价顶替（红线）。</p>';
+  } else {
+    html += '<table><tr><th>物料ID</th><th>型号</th><th>品牌</th><th>品类</th><th>规格</th><th>单位</th><th>匹配</th><th>最新价</th><th>操作</th></tr>';
+    for (const c of r.results || []){
+      const lp = c.latest_price;
+      html += `<tr><td>${c.item_id}</td><td><b>${esc(c.model_raw)}</b></td><td>${esc(c.brand)}</td><td>${esc(c.category)}</td>
+      <td>${esc(c.spec)}</td><td>${esc(c.unit)}</td>
+      <td><span class="tag ${c.match_type}">${label[c.match_type] || c.match_type}${c.matched_alias ? '：' + esc(c.matched_alias) : ''}</span></td>
+      <td>${lp ? lp.price + '（' + {purchase:'采购',quote:'报价',contract:'合同'}[lp.price_type] + ' ' + lp.price_date + (lp.is_reference_only ? '，仅参考' : '') + '）' : '<span class="muted">无价</span>'}</td>
+      <td><button class="btn blue small" onclick="showPrices(${c.item_id})">查价</button>
+          <button class="btn small" onclick="dlgAlias('${esc(c.model_raw)}')">设别名</button></td></tr>`;
+    }
+    html += '</table>';
+    if (r.status === 'fuzzy') html += '<p class="muted" style="margin-top:8px">模糊候选仅供人工挑选，确认后请登记别名。</p>';
+  }
+  $('search-result').innerHTML = html;
+}
+
+// ---------- 别名 ----------
+async function loadAliases(){
+  const kw = $('alias-kw').value.trim();
+  const rows = await api('/api/aliases?keyword=' + encodeURIComponent(kw));
+  let html = '<table><tr><th>别名ID</th><th>原始叫法</th><th>指向物料</th><th>品牌</th><th>来源</th><th>确认时间</th></tr>';
+  for (const a of rows || []){
+    html += `<tr><td>${a.alias_id}</td><td><b>${esc(a.alias_text)}</b></td><td>#${a.item_id} ${esc(a.model_raw)}</td>
+    <td>${esc(a.brand)}</td><td class="muted">${esc(a.source)}</td><td class="muted">${esc(a.confirmed_at)}</td></tr>`;
+  }
+  html += '</table>';
+  if (!(rows || []).length) html = '<p class="muted">暂无别名。BOM 人工确认匹配后在这里登记，下次直接命中。</p>';
+  $('aliases-table').innerHTML = html;
+}
+function dlgAlias(preset){
+  openDlg(`<h3>登记别名（回流机制）</h3><div class="grid2">
+    <div><label>原始叫法（客户/资料写法） *</label><input id="f-alias" value="${preset ? esc(preset).replace(/"/g,'') : ''}"></div>
+    <div><label>指向物料 item_id *</label><input id="f-aitem"></div>
+  </div>`, async () => {
+    const r = await api('/api/aliases', { alias_text: $('f-alias').value.trim(), item_id: parseInt($('f-aitem').value) });
+    r.error ? toast(r.error, true) : toast('别名已登记');
+    loadAliases();
+  });
+}
+
+// ---------- 资料导入（两步式：预览→确认） ----------
+let impData = null;
+async function doParse(){
+  const path = $('imp-path').value.trim();
+  if (!path) return toast('请输入文件路径', true);
+  const r = await api('/api/parse', { path, price_type: $('imp-ptype').value });
+  if (r.error){ $('import-preview').innerHTML = ''; return toast(r.error, true); }
+  impData = r;
+  const s = r.summary;
+  let html = `<p style="margin:6px 0">
+    <b>${esc(r.file)}</b> · 价格类型 <span class="tag ${r.price_type}">${{purchase:'采购成本',contract:'合同价',quote:'报价参考'}[r.price_type] || r.price_type}</span>
+    <span class="muted">（${esc(r.price_type_reason)}）</span> ·
+    共 ${s.total} 行：可入库 ${s.parsed}，需人工 ${s.pending}，库内已有同型号 ${s.dup_in_library || 0}
+  </p>`;
+  if ((r.rows || []).length){
+    html += '<table><tr><th>#</th><th>型号</th><th>品牌</th><th>规格</th><th>单价</th><th>数量</th><th>单位</th><th>供应商</th><th>日期</th><th>来源</th><th>提示</th></tr>';
+    r.rows.slice(0, 50).forEach((row, i) => {
+      html += `<tr><td>${i+1}</td><td><b>${esc(row.model)}</b>${row.existing_item_id ? ` <span class="tag fuzzy" title="库内已有">已有#${row.existing_item_id}</span>` : ''}</td>
+      <td>${esc(row.brand)}</td><td>${esc(row.spec)}</td><td>${row.price ?? '<span class="muted">无</span>'}</td>
+      <td>${row.qty ?? ''}</td><td>${esc(row.unit)}</td><td>${esc(row.vendor)}</td><td>${esc(row.price_date)}</td>
+      <td class="muted">${esc((row.source||'').split('#').slice(1).join('#'))}</td>
+      <td class="err">${esc(row.price_note || '')}</td></tr>`;
+    });
+    html += '</table>';
+    if (r.rows.length > 50) html += `<p class="muted">仅显示前 50 行（共 ${r.rows.length} 行，确认后全部入库）</p>`;
+  }
+  if ((r.pending || []).length){
+    html += '<p class="muted" style="margin-top:8px">需人工处理（写入待确认区）：</p><table><tr><th>原始内容</th><th>原因</th><th>来源</th></tr>';
+    r.pending.slice(0, 10).forEach(p => {
+      html += `<tr><td>${esc(p.raw_text)}</td><td>${esc(p.reason || '')}</td><td class="muted">${esc(p.source || '')}</td></tr>`;
+    });
+    html += '</table>';
+  }
+  html += `<div class="row" style="margin-top:10px">
+    <button class="btn" onclick="doImport()">② 确认入库（${s.parsed} 行 + 待确认 ${s.pending} 行）</button>
+    <button class="btn gray" onclick="impData=null;$('import-preview').innerHTML=''">取消</button>
+  </div>
+  <p class="muted">红线：入库价格均带来源与日期；区间价取上限；无法解析价格的行仅建物料。</p>`;
+  $('import-preview').innerHTML = html;
+}
+async function doImport(){
+  if (!impData) return;
+  const r = await api('/api/import', { rows: impData.rows, pending: impData.pending });
+  if (r.error) return toast(r.error, true);
+  const s = r.summary;
+  toast(`入库完成：成功 ${s.ok}（含仅建物料 ${s.item_only}），失败 ${s.fail}，待确认 +${s.pending_added}`);
+  impData = null; $('import-preview').innerHTML = '';
+  loadItems();
+}
+
+// ---------- 待确认 ----------
+async function loadPending(){
+  const rows = await api('/api/pending?limit=100');
+  let html = '<table><tr><th>ID</th><th>原始内容</th><th>型号</th><th>价格</th><th>日期</th><th>来源</th><th>操作</th></tr>';
+  for (const p of rows || []){
+    html += `<tr><td>${p.pending_id}</td><td>${esc(p.raw_text)}</td><td>${esc(p.model)}</td>
+    <td>${p.price ?? ''}</td><td>${esc(p.price_date)}</td><td class="muted">${esc(p.source)}</td>
+    <td><button class="btn blue small" onclick="confirmPending(${p.pending_id})">确认</button>
+        <button class="btn gray small" onclick="dismissPending(${p.pending_id})">忽略</button></td></tr>`;
+  }
+  html += '</table>';
+  if (!(rows || []).length) html = '<p class="muted">暂无待确认条目。</p>';
+  $('pending-table').innerHTML = html;
+}
+async function confirmPending(id){
+  const model = prompt('确认物料型号（留空则用原条目型号，不存在将新建）：', '') || '';
+  const iid = prompt('绑定已有物料 item_id（留空=按型号新建/查重）：', '') || null;
+  const r = await api('/api/pending/' + id + '/confirm', { model, item_id: iid ? parseInt(iid) : null });
+  r.error ? toast(r.error, true) : toast(`已确认 → 物料 #${r.item_id}`);
+  loadPending();
+}
+async function dismissPending(id){
+  await api('/api/pending/' + id + '/dismiss', {});
+  loadPending();
+}
+
+// ---------- 换算 ----------
+async function loadConv(){
+  const rows = await api('/api/conversions');
+  let html = '<table><tr><th>ID</th><th>从</th><th>到</th><th>系数</th><th>品类</th></tr>';
+  for (const c of rows || []){
+    html += `<tr><td>${c.conv_id}</td><td>${esc(c.from_unit)}</td><td>${esc(c.to_unit)}</td><td>${c.factor}</td><td>${esc(c.category)}</td></tr>`;
+  }
+  html += '</table>';
+  if (!(rows || []).length) html = '<p class="muted">暂无换算。示例：从 箱 到 米 系数 305（网线）。</p>';
+  $('conv-table').innerHTML = html;
+}
+async function addConv(){
+  const r = await api('/api/conversions', { from_unit: $('conv-from').value.trim(), to_unit: $('conv-to').value.trim(),
+    factor: parseFloat($('conv-factor').value), category: $('conv-cat').value.trim() });
+  r.error ? toast(r.error, true) : toast('换算已保存');
+  loadConv();
+}
+
+// ---------- 统计 ----------
+async function loadStats(){
+  const s = await api('/api/stats');
+  $('stats-box').innerHTML = `
+    <div class="stat"><b>${s.items}</b>在用物料</div>
+    <div class="stat"><b>${s.prices}</b>价格记录</div>
+    <div class="stat"><b>${s.aliases}</b>别名</div>
+    <div class="stat"><b>${s.pending}</b>待确认</div>
+    <div class="stat" style="grid-column:span 2"><b style="font-size:14px">${esc(s.last_entry || '—')}</b>最近录入</div>
+    <div class="stat" style="grid-column:span 2"><b style="font-size:14px">${esc(s.db_path)}</b>数据库位置（备份=复制该目录）</div>`;
+}
+
+// ---------- 通用对话框 ----------
+function openDlg(html, action){ $('dlg-content').innerHTML = html; dlgAction = action; $('dlg').showModal(); }
+async function dlgSubmit(){ try { await dlgAction(); $('dlg').close(); } catch(e) { console.error(e); } }
+const dlg = $('dlg');
+
+// ---------- 启动 ----------
+$('token').value = token;
+(async () => {
+  try { const h = await api('/api/health'); $('tokenok').textContent = h.status === 'ok' ? '● 已连接' : ''; }
+  catch(e){ $('tokenok').textContent = ''; }
+  loadItems();
+})();
+</script>
+</body>
+</html>

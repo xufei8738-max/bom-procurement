@@ -1,0 +1,143 @@
+name: Release（打 tag 自动编译发布）
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: 编译 ${{ matrix.artifact }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: bom-procurement-windows
+            separator: ";"
+          - os: macos-latest
+            artifact: bom-procurement-macos
+            separator: ":"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: 跑一遍测试（防止发出坏包）
+        run: python -m pytest server/tests -q
+
+      - name: PyInstaller 打包（单文件可执行）
+        shell: bash
+        run: |
+          pyinstaller --noconfirm --clean --onefile \
+            --name bom-procurement \
+            --add-data "server/webui${{ matrix.separator }}server/webui" \
+            --add-data "scripts/ocr_vision.swift${{ matrix.separator }}scripts" \
+            --collect-all fastmcp --collect-all uvicorn --collect-all pymupdf \
+            --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto \
+            --hidden-import uvicorn.protocols.http.auto \
+            --hidden-import uvicorn.protocols.websockets.auto \
+            --hidden-import uvicorn.lifespan.on \
+            launcher.py
+
+      - name: 冒烟测试打包产物（启动→健康检查→退出）
+        shell: bash
+        run: |
+          set -e
+          BIN=dist/bom-procurement
+          if [ -f dist/bom-procurement.exe ]; then BIN=dist/bom-procurement.exe; fi
+          export PROC_PORT=8765
+          export PROC_DATA_DIR="${RUNNER_TEMP}/procdata"
+          "$BIN" &
+          APP_PID=$!
+          ok=0
+          for i in $(seq 1 40); do
+            sleep 1
+            if curl -sf http://127.0.0.1:8765/api/health >/dev/null 2>&1; then ok=1; break; fi
+          done
+          kill $APP_PID 2>/dev/null || true
+          if [ "$ok" != "1" ]; then echo "❌ 打包产物未通过健康检查"; exit 1; fi
+          echo "✅ 打包产物健康检查通过"
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            dist/bom-procurement
+            dist/bom-procurement.exe
+          if-no-files-found: ignore
+
+  package-skill:
+    name: 打包 Skill
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 归档 skill 包（含源码，可独立安装）
+        run: |
+          mkdir -p out
+          # skill 包 = SKILL.md + 安装/启动脚本 + 完整源码（供 install.py 布署）
+          rsync -a --exclude '.git' --exclude '.venv' --exclude '__pycache__' \
+                --exclude '.pytest_cache' --exclude 'dist' --exclude 'build' \
+                ./ out/bom-procurement/
+          cd out && zip -qr bom-procurement.skill bom-procurement
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bom-procurement-skill
+          path: out/bom-procurement.skill
+
+  release:
+    name: 发布到 Release
+    needs: [build, package-skill]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 下载全部产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: 打 tag 时创建 Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          draft: false
+          generate_release_notes: true
+          body: |
+            ## 安装
+
+            ### Windows
+            1. 下载 `bom-procurement.exe`，双击运行（首次可能提示 SmartScreen → 更多信息 → 仍要运行）
+            2. 浏览器自动打开 `http://127.0.0.1:8000`，接口口令在窗口里打印
+
+            ### macOS（未签名，自用）
+            1. 下载 `bom-procurement`，终端执行 `chmod +x bom-procurement`
+            2. 右键 → 打开（绕过 Gatekeeper），或 `xattr -d com.apple.quarantine ./bom-procurement`
+            3. 浏览器自动打开；口令在终端输出
+
+            ### OneAgent 对接（MCP）
+            - URL：`http://127.0.0.1:8000/mcp`
+            - Header：`Authorization: Bearer <启动时打印的口令>`
+
+            ### 源码/Skill 安装
+            下载 `bom-procurement.skill` → 解压后 `bash install.sh`（Windows：`install.bat`）
+          files: |
+            artifacts/bom-procurement-windows/bom-procurement.exe
+            artifacts/bom-procurement-macos/bom-procurement
+            artifacts/bom-procurement-skill/bom-procurement.skill

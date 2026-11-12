@@ -1,0 +1,13 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+fastmcp>=2.3
+openpyxl>=3.1
+python-docx>=1.1
+pymupdf>=1.24
+pillow>=10.0
+pytest>=8.0
+httpx>=0.27
+# OCR 后端（平台二选一）：
+#   macOS：系统 Vision（需 swift，一般已具备，无需装包）
+#   Windows/Linux：RapidOCR（纯 pip，自带 onnx 模型）
+rapidocr-onnxruntime>=1.3 ; platform_system != "Darwin"
