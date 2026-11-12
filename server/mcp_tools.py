@@ -10,6 +10,8 @@ from fastmcp import FastMCP
 
 from server import services
 
+import server.bom as _bom
+
 mcp = FastMCP(
     name="bom-procurement",
     instructions=(
@@ -100,6 +102,32 @@ def import_parsed(rows: list[dict], pending: list[dict] | None = None,
     价格无法解析的行只建物料不建价；pending 行写入待确认区待人工处理。
     红线：入库行必须带 source 与 price_date。"""
     return services.import_parsed(rows, pending, default_source)
+
+
+@mcp.tool
+def compare_bom(path: str) -> dict:
+    """客户 BOM 比对（Skill 2 核心）：读 BOM（xlsx/xls/csv/docx/pdf/图片）→ 逐行三级匹配
+    → 按规则取价（purchase>contract>quote，同类型取最新）→ 单位换算 → 汇总。
+
+    返回 results（每行：status exact/alias/fuzzy/none、命中物料、价格、换算、异常、候选）
+    与 summary（有价行覆盖率、合计、分类小计）。
+
+    **红线**：fuzzy 候选不带价，必须人工确认后调 add_alias 回流再重新比对；
+    none 行价格留空，绝不能估算或填 0。"""
+    return _bom.compare_bom(path)
+
+
+@mcp.tool
+def export_cost_sheet(path: str, out_path: str = "") -> dict:
+    """比对并导出成本清单 Excel（主表 + 未匹配清单 + 口径异常三区）。
+    返回生成的文件路径与汇总；out_path 为空时保存到用户主目录。"""
+    return _bom.export_cost_sheet(path, out_path or None)
+
+
+@mcp.tool
+def load_bom(path: str) -> dict:
+    """只读预览 BOM（不比对）：返回解析出的行项目与无法解析的行，用于先确认列识别是否正确。"""
+    return _bom.load_bom(path)
 
 
 # ---------------- 待确认区 ----------------

@@ -64,6 +64,7 @@
 <nav>
   <button data-tab="items" class="active" onclick="switchTab('items')">物料</button>
   <button data-tab="import" onclick="switchTab('import')">资料导入</button>
+  <button data-tab="bom" onclick="switchTab('bom')">BOM 比对</button>
   <button data-tab="prices" onclick="switchTab('prices')">价格</button>
   <button data-tab="search" onclick="switchTab('search')">检索匹配</button>
   <button data-tab="aliases" onclick="switchTab('aliases')">别名</button>
@@ -104,6 +105,19 @@
         <button class="btn blue" onclick="doParse()">① 解析预览</button>
       </div>
       <div id="import-preview"></div>
+    </div>
+  </section>
+
+  <!-- BOM 比对 -->
+  <section id="tab-bom" style="display:none">
+    <div class="card">
+      <h3>BOM 比对（客户物料清单 → 成本清单）</h3>
+      <div class="searchbar">
+        <input id="bom-path" placeholder="客户 BOM 路径，如 ~/Documents/客户BOM.xlsx" style="width:400px">
+        <button class="btn blue" onclick="doBomCompare()">① 比对</button>
+        <button class="btn" onclick="doBomExport()">② 导出成本清单 Excel</button>
+      </div>
+      <div id="bom-result"></div>
     </div>
   </section>
 
@@ -394,6 +408,84 @@ async function doImport(){
   toast(`入库完成：成功 ${s.ok}（含仅建物料 ${s.item_only}），失败 ${s.fail}，待确认 +${s.pending_added}`);
   impData = null; $('import-preview').innerHTML = '';
   loadItems();
+}
+
+// ---------- BOM 比对 ----------
+let bomData = null;
+async function doBomCompare(){
+  const path = $('bom-path').value.trim();
+  if (!path) return toast('请输入 BOM 文件路径', true);
+  const r = await api('/api/bom/compare', { path });
+  if (r.error){ $('bom-result').innerHTML = ''; return toast(r.error, true); }
+  bomData = r;
+  const s = r.summary;
+  const st = r.results.filter(x=>x.status==='exact').length,
+        al = r.results.filter(x=>x.status==='alias').length,
+        fz = r.results.filter(x=>x.status==='fuzzy').length,
+        nn = r.results.filter(x=>x.status==='none').length;
+  let html = `<div class="row" style="margin:6px 0">
+    <span class="tag exact">精确 ${st}</span><span class="tag alias">别名 ${al}</span>
+    <span class="tag fuzzy">模糊候选 ${fz}</span><span class="tag none">未匹配 ${nn}</span>
+    <b>合计 ¥${s.total_cost?.toLocaleString?.() ?? s.total_cost}</b>
+    <span class="muted">有价行覆盖率 ${s.coverage_pct}%（${s.priced_lines}/${s.lines}）</span>
+    ${s.coverage_warning ? `<span class="err">${s.coverage_warning}</span>` : ''}
+  </div>`;
+  html += '<table><tr><th>行号</th><th>客户型号</th><th>数量</th><th>单位</th><th>匹配</th><th>内部型号</th><th>单价</th><th>小计</th><th>操作</th></tr>';
+  for (const line of r.results){
+    const pi = line.price_info || {}, it = line.item || {};
+    const eff = pi.effective_price;
+    const stTag = {exact:'精确命中',alias:'别名命中',fuzzy:'模糊候选',none:'未匹配'}[line.status] || line.status;
+    let act = '';
+    if (line.status === 'fuzzy'){
+      act = `<select id="cand-${line.row_no}" style="max-width:170px">` +
+        line.candidates.map(c=>`<option value="${c.item_id}">${esc(c.model_raw)} (${esc(c.brand||'-')})</option>`).join('') +
+        `</select> <button class="btn small" onclick="confirmFuzzy('${esc(line.customer_model)}', ${line.row_no})">确认↺别名</button>`;
+    } else if (line.status === 'none'){
+      act = '<span class="err">需人工新建/补价</span>';
+    }
+    html += `<tr><td>${line.row_no}</td><td><b>${esc(line.customer_model)}</b><div class="muted">${esc(line.customer_name||'')}</div></td>
+      <td>${line.qty ?? ''}</td><td>${esc(line.unit)}</td>
+      <td><span class="tag ${line.status}">${stTag}</span></td>
+      <td>${it.model_raw ? '#' + it.item_id + ' ' + esc(it.model_raw) : ''}</td>
+      <td>${eff != null ? '¥' + eff + (line.convert_note ? ' <span class="muted">' + esc(line.convert_note) + '</span>' : '') : '<span class="muted">—</span>'}</td>
+      <td>${line.subtotal != null ? '<b>' + line.subtotal + '</b>' : '—'}</td>
+      <td>${act}</td></tr>`;
+  }
+  html += '</table>';
+  if ((r.unparsed||[]).length){
+    html += `<p class="muted" style="margin-top:6px">BOM 中 ${r.unparsed.length} 行无法解析（见导出 Excel 的「口径异常」页）</p>`;
+  }
+  $('bom-result').innerHTML = html;
+}
+async function confirmFuzzy(model, rowNo){
+  const sel = $('cand-' + rowNo);
+  const itemId = parseInt(sel.value);
+  if (!itemId) return toast('请先选择候选', true);
+  const r = await api('/api/aliases', { alias_text: model, item_id: itemId, source: 'BOM比对确认' });
+  if (r.error) return toast(r.error, true);
+  toast('已登记别名：' + model + ' → #' + itemId + '，重新比对生效');
+  await doBomCompare();   // 立即重新比对（别名回流后直接命中）
+}
+async function doBomExport(){
+  const path = $('bom-path').value.trim();
+  if (!path) return toast('请输入 BOM 文件路径', true);
+  const res = await fetch('/api/bom/export', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  if (res.status === 401) return toast('口令错误', true);
+  if (!res.ok){
+    const err = await res.json().catch(() => ({}));
+    return toast(err.error || '导出失败', true);
+  }
+  const blob = await res.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '成本清单.xlsx';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('成本清单已下载');
 }
 
 // ---------- 待确认 ----------

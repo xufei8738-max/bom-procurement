@@ -69,10 +69,14 @@ def convert_unit(price: float, price_unit: str | None, target_unit: str | None,
                 "note": f"计数单位互认（{price_unit}↔{target_unit}，1:1）"}
 
     with db.db() as con:
+        # 品类双向前缀匹配：换算表存「线材」可命中物料品类「线材/网线」，
+        # 物料无品类（''）时也允许命中带品类的换算记录；通用记录（category=''）兜底；
+        # 最长品类优先
         row = con.execute(
             "SELECT factor FROM unit_conversions WHERE from_unit=? AND to_unit=? "
-            "AND (category=? OR category='') ORDER BY category='' DESC LIMIT 1",
-            (price_unit, target_unit, category),
+            "AND (category='' OR ? LIKE category || '%' OR category LIKE ? || '%') "
+            "ORDER BY length(category) DESC LIMIT 1",
+            (price_unit, target_unit, category, category),
         ).fetchone()
         if row:
             f = float(row["factor"])

@@ -129,6 +129,20 @@ def test_pending_confirm_writes_alias():
     assert services.list_pending() == []
 
 
+def test_unit_conversion_category_fuzzy(tmp_path):
+    """换算表品类「线材」应命中无品类物料与前缀品类物料（双向宽容）。"""
+    _reset()
+    from server import pricing
+    services.upsert_conversion("箱", "米", 305, "线材")
+    # 物料无品类（资料没提供品类列的常见情况）
+    assert pricing.convert_unit(305.0, "箱", "米", "")["price"] == 1.0
+    # 物料品类为前缀展开
+    assert pricing.convert_unit(305.0, "箱", "米", "线材/网线")["price"] == 1.0
+    # 无关品类不硬算（红线）
+    r = pricing.convert_unit(10.0, "箱", "米", "安防/摄像机")
+    assert r["price"] is None
+
+
 def test_unit_conversion():
     _reset()
     services.upsert_conversion("箱", "米", 305, "网线")

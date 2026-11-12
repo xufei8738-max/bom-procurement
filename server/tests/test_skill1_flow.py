@@ -109,5 +109,6 @@ def test_mcp_tool_count_includes_new_tools():
             tools = await c.list_tools()
             names = {t.name for t in tools}
             assert {"parse_import_file", "import_parsed"} <= names
-            assert len(tools) == 16
+            assert {"compare_bom", "export_cost_sheet", "load_bom"} <= names
+            assert len(tools) == 19
     asyncio.run(run())

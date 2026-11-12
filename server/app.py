@@ -197,6 +197,30 @@ async def api_import_parsed(req: dict, _: None = Depends(check_token)):
     )
 
 
+# ---------------- BOM 比对（Skill 2） ----------------
+
+@app.post("/api/bom/compare")
+async def api_bom_compare(req: dict, _: None = Depends(check_token)):
+    """比对客户 BOM，返回结构化结果（JSON）。"""
+    from server import bom
+    return bom.compare_bom(req.get("path", ""))
+
+
+@app.post("/api/bom/export")
+async def api_bom_export(req: dict, _: None = Depends(check_token)):
+    """比对并直接下载成本清单 xlsx。"""
+    from server import bom
+
+    result = bom.export_cost_sheet(req.get("path", ""), req.get("out") or None)
+    if "error" in result:
+        return JSONResponse(result, status_code=400)
+    out = result["out"]
+    return FileResponse(
+        out, filename=Path(out).name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 # ---------------- MCP 挂载 ----------------
 
 mcp_http_app = mcp_app  # 已在文件头创建
