@@ -111,6 +111,8 @@ description: 器件采购库的安装、维护与两项工作流——把公司�
 ## 六、口径约定
 
 - `price_type`：`purchase` 采购成本 / `quote` 报价参考 / `contract` 合同价
+- `price_date`：**价格日期**（资料上的日期，如报价单落款日）
+- `created_at`：**录入时间**（这条价格何时进的库）——判断"数据新旧/是否复录"时看它
 - `tax_mode`：`included` 含税 / `excluded` 未税 / `unknown` 未标注（**不做擅自折算**，原样带标签）
 - 单位：`items.unit` 是基本单位；`prices.unit` 是计价单位，两者可以不同，靠 `unit_conversions` 桥接
 - 只出采购成本，**不做对外报价**（不加价、不算折扣）

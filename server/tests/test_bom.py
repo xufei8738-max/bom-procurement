@@ -73,6 +73,7 @@ def test_compare_exact_hit_with_price(tmp_path, seeded):
     line = r["results"][0]
     assert line["status"] == "exact"
     assert line["price_info"]["price"] == 1180.0
+    assert line["price_info"]["created_at"]                # 录入时间标签贯通到比对结果
     assert line["subtotal"] == 11800.0
     assert r["summary"]["total_cost"] == 11800.0
     assert r["summary"]["coverage_pct"] == 100.0
@@ -197,10 +198,14 @@ def test_export_cost_sheet_three_sections(tmp_path, seeded):
 
     ws = wb["成本清单"]
     assert ws.cell(1, 1).value == "BOM行号"
+    assert ws.cell(1, 17).value == "录入时间"             # 主表含录入时间列
     # 三行数据 + 空行 + 分类小计 + 合计 + 覆盖率
     assert ws.max_row >= 7
     texts = [ws.cell(r, 6).value for r in range(2, 5)]
     assert texts == ["精确命中", "模糊候选", "未匹配"]
+    created = [ws.cell(r, 17).value for r in range(2, 3)]
+    assert all(created)                                     # 精确命中行的录入时间非空
+    assert ws.cell(3, 17).value is None                     # 模糊候选行无价（红线）→ 无录入时间
 
     ws2 = wb["未匹配清单"]
     assert ws2.cell(1, 1).value == "BOM行号"

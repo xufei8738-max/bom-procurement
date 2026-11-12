@@ -271,12 +271,14 @@ async function loadPrices(){
   if (!id) return toast('请输入物料 item_id', true);
   const rows = await api('/api/prices/' + id);
   const TYPE = { purchase: ['采购成本','purchase'], quote: ['报价参考','quote'], contract: ['合同价','contract'] };
-  let html = '<table><tr><th>价格ID</th><th>单价</th><th>类型</th><th>税口径</th><th>数量</th><th>计价单位</th><th>供应商</th><th>日期</th><th>来源</th></tr>';
+  let html = '<table><tr><th>价格ID</th><th>单价</th><th>类型</th><th>税口径</th><th>数量</th><th>计价单位</th><th>供应商</th><th>价格日期</th><th>录入时间</th><th>来源</th></tr>';
   for (const p of rows || []){
     const t = TYPE[p.price_type] || [p.price_type, ''];
+    const created = (p.created_at || '').slice(0, 16);
     html += `<tr><td>${p.price_id}</td><td><b>${p.price}</b></td><td><span class="tag ${t[1]}">${t[0]}</span></td>
     <td>${p.tax_mode === 'included' ? '含税' : p.tax_mode === 'excluded' ? '未税' : '未知'}</td>
     <td>${p.qty ?? ''}</td><td>${esc(p.unit)}</td><td>${esc(p.vendor)}</td><td>${esc(p.price_date)}</td>
+    <td class="muted">${esc(created)}</td>
     <td class="muted">${esc(p.source)}</td></tr>`;
   }
   html += '</table>';
@@ -430,7 +432,7 @@ async function doBomCompare(){
     <span class="muted">有价行覆盖率 ${s.coverage_pct}%（${s.priced_lines}/${s.lines}）</span>
     ${s.coverage_warning ? `<span class="err">${s.coverage_warning}</span>` : ''}
   </div>`;
-  html += '<table><tr><th>行号</th><th>客户型号</th><th>数量</th><th>单位</th><th>匹配</th><th>内部型号</th><th>单价</th><th>小计</th><th>操作</th></tr>';
+  html += '<table><tr><th>行号</th><th>客户型号</th><th>数量</th><th>单位</th><th>匹配</th><th>内部型号</th><th>单价</th><th>小计</th><th>录入时间</th><th>操作</th></tr>';
   for (const line of r.results){
     const pi = line.price_info || {}, it = line.item || {};
     const eff = pi.effective_price;
@@ -449,6 +451,7 @@ async function doBomCompare(){
       <td>${it.model_raw ? '#' + it.item_id + ' ' + esc(it.model_raw) : ''}</td>
       <td>${eff != null ? '¥' + eff + (line.convert_note ? ' <span class="muted">' + esc(line.convert_note) + '</span>' : '') : '<span class="muted">—</span>'}</td>
       <td>${line.subtotal != null ? '<b>' + line.subtotal + '</b>' : '—'}</td>
+      <td class="muted">${esc((pi.created_at || '').slice(0, 16))}${pi.price_date ? '<div>' + esc(pi.price_date) + '</div>' : ''}</td>
       <td>${act}</td></tr>`;
   }
   html += '</table>';

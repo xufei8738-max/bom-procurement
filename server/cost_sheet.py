@@ -30,7 +30,7 @@ MAIN_HEADERS = [
     "BOM行号", "客户名称", "客户型号", "数量", "单位", "匹配状态",
     "内部型号", "品牌", "品类", "规格",
     "价格类型", "单价", "计价单位", "换算", "小计",
-    "价格日期", "供应商", "税口径", "来源", "备注",
+    "价格日期", "录入时间", "供应商", "税口径", "来源", "备注",
 ]
 UNMATCHED_HEADERS = ["BOM行号", "客户描述", "客户型号", "候选1", "候选2", "候选3", "建议"]
 ANOMALY_HEADERS = ["BOM行号", "类型", "说明"]
@@ -60,7 +60,7 @@ def build(compared: dict, out_path: str | None = None) -> str:
     ws.append(MAIN_HEADERS)
     _style_header(ws, len(MAIN_HEADERS))
     widths = {1: 8, 2: 20, 3: 22, 4: 7, 5: 6, 6: 10, 7: 22, 8: 10, 9: 13, 10: 22,
-              11: 10, 12: 10, 13: 10, 14: 12, 15: 12, 16: 12, 17: 12, 18: 9, 19: 20, 20: 18}
+              11: 10, 12: 10, 13: 10, 14: 12, 15: 12, 16: 12, 17: 16, 18: 12, 19: 9, 20: 20, 21: 18}
     for c, w in widths.items():
         ws.column_dimensions[get_column_letter(c)].width = w
 
@@ -78,7 +78,7 @@ def build(compared: dict, out_path: str | None = None) -> str:
             TYPE_CN.get(info.get("price_type"), info.get("price_type", "")),
             info.get("price"), info.get("price_unit"), r.get("convert_note", ""),
             r.get("subtotal"),
-            info.get("price_date"), info.get("vendor"),
+            info.get("price_date"), info.get("created_at", ""), info.get("vendor"),
             TAX_CN.get(info.get("tax_mode"), info.get("tax_mode", "")),
             info.get("source"), remark,
         ])
@@ -89,20 +89,28 @@ def build(compared: dict, out_path: str | None = None) -> str:
             cell.font, cell.border = BODY_FONT, BORDER
             if fill:
                 cell.fill = fill
-            cell.alignment = Alignment(vertical="center", wrap_text=(c in (10, 20)))
+            cell.alignment = Alignment(vertical="center", wrap_text=(c in (10, 21)))
 
-    # 底部汇总：分类小计 + 合计 + 覆盖率
+    # 底部汇总：分类小计 + 合计 + 覆盖率（小计列已右移一位到第 16 列）
     ws.append([])
+    last_col = len(MAIN_HEADERS)
     for cat, amt in (summary.get("by_category") or {}).items():
-        ws.append(["小计", cat, "", "", "", "", "", "", "", "", "", "", "", "", amt])
-    ws.append(["合计", "", "", "", "", f"有价行 {summary.get('priced_lines', 0)}/"
-               f"{summary.get('lines', 0)}", "", "", "", "", "", "", "", "",
-               summary.get("total_cost", 0)])
-    ws.append(["覆盖率", f"{summary.get('coverage_pct', 0)}%",
-               summary.get("coverage_warning", "") or "（达标）",
-               f"生成 {date.today().isoformat()}"])
+        row = [""] * last_col
+        row[0], row[1], row[last_col - 1] = "小计", cat, amt
+        ws.append(row)
+    row = [""] * last_col
+    row[0] = "合计"
+    row[5] = f"有价行 {summary.get('priced_lines', 0)}/{summary.get('lines', 0)}"
+    row[last_col - 1] = summary.get("total_cost", 0)
+    ws.append(row)
+
+    row = [""] * last_col
+    row[0], row[1], row[2] = "覆盖率", f"{summary.get('coverage_pct', 0)}%", \
+        summary.get("coverage_warning", "") or "（达标）"
+    row[3] = f"生成 {date.today().isoformat()}"
+    ws.append(row)
     for r in range(ws.max_row - len(summary.get("by_category") or {}) - 2, ws.max_row + 1):
-        for c in range(1, len(MAIN_HEADERS) + 1):
+        for c in range(1, last_col + 1):
             ws.cell(r, c).font = Font(name="Microsoft YaHei", size=10, bold=True)
 
     # ---------- 未匹配清单 ----------

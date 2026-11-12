@@ -161,6 +161,7 @@ def _attach_price(out: dict, item_id: int, bom_unit: str, category: str = "") ->
         "price_type": p["price_type"],
         "tax_mode": p["tax_mode"],
         "price_date": p["price_date"],
+        "created_at": p.get("created_at", ""),   # 录入时间（何时进的库，区别于资料上的价格日期）
         "vendor": p["vendor"],
         "source": p["source"],
         "price_unit": p.get("unit") or "",
