@@ -22,9 +22,21 @@ def _prepare_path() -> None:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
+def _force_utf8_console() -> None:
+    """Windows 控制台默认 cp1252/cp936，print 中文会崩；强制 UTF-8 + 不可编码字符替换。"""
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if stream and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:  # noqa: BLE001 - 重定向到无 reconfigure 的流时忽略
+                pass
+
+
 def main() -> None:
     port = int(os.environ.get("PROC_PORT", "8000"))
 
+    _force_utf8_console()
     _prepare_path()
     from server import db
 

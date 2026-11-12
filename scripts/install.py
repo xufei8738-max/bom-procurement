@@ -32,6 +32,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# Windows 控制台默认 cp1252/cp936，print 中文会崩
+for _s in ("stdout", "stderr"):
+    _stream = getattr(sys, _s, None)
+    if _stream and hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            pass
+
 from scripts.platform_utils import (  # noqa: E402
     IS_WINDOWS, OS_NAME, default_code_dir, default_data_dir,
     find_python, venv_pip, venv_python,

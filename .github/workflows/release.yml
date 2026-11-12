@@ -62,16 +62,21 @@ jobs:
           if [ -f dist/bom-procurement.exe ]; then BIN=dist/bom-procurement.exe; fi
           export PROC_PORT=8765
           export PROC_DATA_DIR="${RUNNER_TEMP}/procdata"
-          "$BIN" &
+          "$BIN" > smoke.log 2>&1 &
           APP_PID=$!
           ok=0
-          for i in $(seq 1 40); do
+          for i in $(seq 1 45); do
             sleep 1
             if curl -sf http://127.0.0.1:8765/api/health >/dev/null 2>&1; then ok=1; break; fi
           done
           kill $APP_PID 2>/dev/null || true
-          if [ "$ok" != "1" ]; then echo "❌ 打包产物未通过健康检查"; exit 1; fi
+          if [ "$ok" != "1" ]; then
+            echo "❌ 打包产物未通过健康检查，进程输出："
+            cat smoke.log
+            exit 1
+          fi
           echo "✅ 打包产物健康检查通过"
+          head -6 smoke.log
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
