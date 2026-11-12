@@ -96,18 +96,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 归档 skill 包（含源码，可独立安装）
+      - name: 归档 skill 包（zip 与 .skill 双份，内容相同）
         run: |
           mkdir -p out
           # skill 包 = SKILL.md + 安装/启动脚本 + 完整源码（供 install.py 布署）
           rsync -a --exclude '.git' --exclude '.venv' --exclude '__pycache__' \
                 --exclude '.pytest_cache' --exclude 'dist' --exclude 'build' \
                 ./ out/bom-procurement/
-          cd out && zip -qr bom-procurement.skill bom-procurement
+          cd out
+          # .zip 供人手动解压（双击即可）；.skill 供 OneAgent 技能系统安装
+          zip -qr bom-procurement.zip bom-procurement
+          cp bom-procurement.zip bom-procurement.skill
       - uses: actions/upload-artifact@v4
         with:
           name: bom-procurement-skill
-          path: out/bom-procurement.skill
+          path: |
+            out/bom-procurement.zip
+            out/bom-procurement.skill
 
   release:
     name: 发布到 Release
@@ -154,13 +159,24 @@ jobs:
             cd bom-procurement && bash install.sh
             ```
 
-            ### OneAgent 对接（MCP）
-            - URL：`http://127.0.0.1:8000/mcp`
-            - Header：`Authorization: Bearer <启动时打印的口令>`
-
             ### 源码/Skill 安装
-            下载 `bom-procurement.skill` → 解压后 `bash install.sh`（Windows：`install.bat`）
+            1. 下载 `bom-procurement.zip`（双击解压；**注意 `.skill` 后缀文件也是 zip**，
+               双击解不开时改名为 .zip 或用 `unzip bom-procurement.skill`）
+            2. 解压后进入目录执行 `bash install.sh`（Windows: `install.bat`）
+            3. 安装器最后会打印 **MCP 配置参数（URL 和口令）**，照着填进 OneAgent 即可
+
+            📖 完整步骤（OneAgent MCP 逐项配置 + Skill 三种安装方式 + 排错表）：
+            [docs/oneagent-setup.md](https://github.com/xufei8738-max/bom-procurement/blob/main/docs/oneagent-setup.md)
+
+            ### OneAgent 对接（MCP）
+            在 OneAgent 的 设置 → MCP 服务器管理 添加：
+            - 传输方式：`http`
+            - URL：`http://127.0.0.1:8000/mcp`（**结尾 /mcp 不能漏**）
+            - Header：键 `Authorization`，值 `Bearer 你的口令`（**Bearer 后有一个空格**）
+            - 口令见启动时终端输出，或数据目录 `接口口令.txt`
+            - 成功标志：工具列表出现 19 个工具
           files: |
             artifacts/bom-procurement-windows/bom-procurement.exe
             artifacts/bom-procurement-macos/bom-procurement
+            artifacts/bom-procurement-skill/bom-procurement.zip
             artifacts/bom-procurement-skill/bom-procurement.skill

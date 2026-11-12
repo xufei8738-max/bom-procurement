@@ -33,12 +33,18 @@ xattr -d com.apple.quarantine bom-procurement
 也可**源码安装**（不触发任何拦截，推荐）：`git clone` 后 `bash install.sh`，详见 macOS 安装说明。
 
 ### 源码运行 / Skill 安装
+
 ```bash
 git clone https://github.com/xufei8738-max/bom-procurement.git
 cd bom-procurement
 bash install.sh     # Windows: install.bat（自动建 venv、装依赖、建库、注册开机自启）
 ```
-或下载 Release 里的 `bom-procurement.skill`，对 OneAgent 说「安装采购系统」。
+
+或从 Release 下载 `bom-procurement.zip` 解压安装。**注意**：Release 里的 `.skill` 文件
+本质是 zip（扩展名不同所以双击解不开），改名为 `.zip` 或用 `unzip bom-procurement.skill` 即可。
+安装完成后，安装器会打印 MCP 配置参数。
+
+> 📖 **完整操作步骤见 [docs/oneagent-setup.md](docs/oneagent-setup.md)**——含 OneAgent MCP 配置逐项填写说明、Skill 三种安装方式、失败排查表。
 
 ## 支持的资料格式（Skill 1 录入）
 
@@ -52,13 +58,19 @@ bash install.sh     # Windows: install.bat（自动建 venv、装依赖、建库
 
 ## OneAgent MCP 对接
 
-| 项 | 值 |
-|---|---|
-| 传输 | http（streamable HTTP） |
-| URL | `http://127.0.0.1:8000/mcp` |
-| Header | `Authorization: Bearer <口令>` |
+在 OneAgent 的 **设置 → MCP 服务器管理** 中添加一个 http 服务器：
 
-口令在数据目录（默认 `~/procurement-data`）：`接口口令.txt` 或 `config.json` 的 `token` 字段。16 个工具详见 `docs/procurement-system-spec.md` §5。
+| 配置项 | 填写内容 |
+|---|---|
+| 传输方式 | `http`（或 http/sse、streamable HTTP） |
+| URL | `http://127.0.0.1:8000/mcp` ← **结尾的 `/mcp` 不能漏** |
+| Header | 键 `Authorization`，值 `Bearer 你的口令` ← **Bearer 后有一个空格** |
+
+口令来源：启动时的终端输出，或 `~/procurement-data/接口口令.txt`。
+连接成功的标志：工具列表出现 19 个工具（`search_items`、`compare_bom` 等）。
+
+> ⚠️ 必须先把采购系统跑起来，否则连接会被拒绝。
+> 逐项截图级说明与排错表：[docs/oneagent-setup.md](docs/oneagent-setup.md)
 
 ## 数据与备份
 
