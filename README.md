@@ -17,11 +17,20 @@
 从 [Releases](../../releases) 下载 `bom-procurement.exe`，双击运行（SmartScreen 提示时选「更多信息→仍要运行」）。浏览器自动打开操作界面。
 
 ### macOS（未签名，自用）
+
+从 [Releases](../../releases) 下载 `bom-procurement`（无后缀）后，因未做 Apple 签名，首次运行会被 Gatekeeper 拦截。放行命令：
+
 ```bash
+cd ~/Downloads
 chmod +x bom-procurement
-xattr -d com.apple.quarantine ./bom-procurement   # 绕过 Gatekeeper
+xattr -d com.apple.quarantine bom-procurement
 ./bom-procurement
 ```
+
+> 若系统设置里找不到「仍要打开」入口（macOS 15+ 常见），务必用上面的命令方式。
+> 完整说明（四种方式 + 常见报错处理）：**[docs/install-macos.md](docs/install-macos.md)**
+
+也可**源码安装**（不触发任何拦截，推荐）：`git clone` 后 `bash install.sh`，详见 macOS 安装说明。
 
 ### 源码运行 / Skill 安装
 ```bash

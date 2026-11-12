@@ -54,6 +54,10 @@ jobs:
             --hidden-import uvicorn.lifespan.on \
             launcher.py
 
+      - name: ad-hoc 签名（仅 macOS，消除「已损坏」误导提示）
+        if: runner.os == 'macOS'
+        run: codesign --force --sign - dist/bom-procurement
+
       - name: 冒烟测试打包产物（启动→健康检查→退出）
         shell: bash
         run: |
@@ -132,9 +136,23 @@ jobs:
             2. 浏览器自动打开 `http://127.0.0.1:8000`，接口口令在窗口里打印
 
             ### macOS（未签名，自用）
-            1. 下载 `bom-procurement`，终端执行 `chmod +x bom-procurement`
-            2. 右键 → 打开（绕过 Gatekeeper），或 `xattr -d com.apple.quarantine ./bom-procurement`
-            3. 浏览器自动打开；口令在终端输出
+            因未做 Apple 签名，首次运行会被 Gatekeeper 拦截，**这不是文件损坏**。放行命令：
+
+            ```bash
+            cd ~/Downloads
+            chmod +x bom-procurement
+            xattr -d com.apple.quarantine bom-procurement
+            ./bom-procurement
+            ```
+
+            若系统设置里找不到「仍要打开」入口（macOS 15+ 常见），务必用上面的命令方式。
+            完整说明（四种方式 + 常见报错处理）：[docs/install-macos.md](https://github.com/xufei8738-max/bom-procurement/blob/main/docs/install-macos.md)
+
+            也可**源码安装**（完全不触发 Gatekeeper，推荐）：
+            ```bash
+            git clone https://github.com/xufei8738-max/bom-procurement.git
+            cd bom-procurement && bash install.sh
+            ```
 
             ### OneAgent 对接（MCP）
             - URL：`http://127.0.0.1:8000/mcp`
